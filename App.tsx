@@ -4,19 +4,31 @@ import {
   useQuery,
 } from '@tanstack/react-query'
 import { StatusBar } from 'expo-status-bar'
-import { useState } from 'react'
-import { SafeAreaView, View } from 'react-native'
+import { useState, useRef } from 'react'
+import { SafeAreaView } from 'react-native'
 import { LineChart } from 'react-native-gifted-charts'
 import {
   Button,
   ScrollView,
   TamaguiProvider,
   Text,
+  View,
   XStack,
   YStack,
 } from 'tamagui'
 import { CheckboxWithLabel } from './src/components/CheckboxWithLabel'
+import { Header } from './src/components/Header'
+import { LegendItem } from './src/components/LegendItem'
 import config from './tamagui.config'
+import {
+  GestureDetector,
+  Gesture,
+  GestureHandlerRootView,
+} from 'react-native-gesture-handler'
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+} from 'react-native-reanimated'
 
 // const config = createTamagui(baseConfig)
 
@@ -47,27 +59,37 @@ const API_URL =
   'https://mock.apidog.com/m1/892843-874692-default/marketdata/history/AAPL'
 
 const COLORS = {
-  open: '#00008B',
-  close: '#7B68EE',
-  low: '#20B2AA',
-  high: '#FF69B4',
+  open: '#0A0A7C',
+  high: '#E8618C',
+  low: '#22CCB2',
+  close: '#7F55E0',
 }
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AppInternal />
-    </QueryClientProvider>
+    <TamaguiProvider config={config}>
+      <StatusBar style="auto" />
+      <SafeAreaView style={{ flex: 1 }}>
+        {/* queryClient must be ready before use */}
+        <QueryClientProvider client={queryClient}>
+          <GestureHandlerRootView>
+            <AppInternal />
+          </GestureHandlerRootView>
+        </QueryClientProvider>
+      </SafeAreaView>
+    </TamaguiProvider>
   )
 }
 
 const AppInternal = () => {
-  const [visibleLines, setVisibleLines] = useState({
-    open: true,
-    close: true,
-    low: false,
-    high: false,
-  })
+  const [showOpen, toggleShowOpen] = useState(true)
+  const [showClose, toggleShowClose] = useState(true)
+  const [showLow, toggleShowLow] = useState(true)
+  const [showHigh, toggleShowHigh] = useState(true)
+
+  // Add shared values for pinch gesture
+  const scale = useSharedValue(1)
+  const savedScale = useSharedValue(1)
 
   const { data, refetch, isFetching } = useQuery({
     queryKey: ['aapl-data'],
@@ -78,133 +100,110 @@ const AppInternal = () => {
     },
   })
 
-  const handleToggle = (key: keyof typeof visibleLines) => {
-    setVisibleLines((prev) => ({ ...prev, [key]: !prev[key] }))
+  // Reset zoom function
+  const resetZoom = () => {
+    scale.value = 1
+    savedScale.value = 1
   }
 
-  // Prepare chart data
-  const chartLines = [
-    visibleLines.open && {
-      data: data?.map((d: any) => ({
-        value: d.open,
-        label: new Date(Number(d.timestamp) * 1000).toLocaleDateString(),
-      })),
-      color: COLORS.open,
-      label: 'Open',
-    },
-    visibleLines.close && {
-      data: data?.map((d: any) => ({
-        value: d.close,
-        label: new Date(Number(d.timestamp) * 1000).toLocaleDateString(),
-      })),
-      color: COLORS.close,
-      label: 'Close',
-    },
-    visibleLines.low && {
-      data: data?.map((d: any) => ({
-        value: d.low,
-        label: new Date(Number(d.timestamp) * 1000).toLocaleDateString(),
-      })),
-      color: COLORS.low,
-      label: 'Low',
-    },
-    visibleLines.high && {
-      data: data?.map((d: any) => ({
-        value: d.high,
-        label: new Date(Number(d.timestamp) * 1000).toLocaleDateString(),
-      })),
-      color: COLORS.high,
-      label: 'High',
-    },
-  ].filter(Boolean)
+  // Create pinch gesture
+  const pinchGesture = Gesture.Pinch()
+    .onUpdate((e) => {
+      scale.value = savedScale.value * e.scale
+    })
+    .onEnd(() => {
+      savedScale.value = scale.value
+    })
+
+  // Create animated style for scaling
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }))
+
+  const open = data?.map((d) => ({
+    value: d.open,
+    label: new Date(Number(d.timestamp) * 1000).toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }),
+  }))
+
+  const close = data?.map((d) => ({ value: d.close }))
+  const low = data?.map((d) => ({ value: d.low }))
+  const high = data?.map((d) => ({ value: d.high }))
 
   return (
-    <TamaguiProvider config={config}>
-      <SafeAreaView style={{ flex: 1 }}>
-        <ScrollView>
-          <YStack f={1} p="$4" bg="#f5f5f7">
-            <XStack ai="center" mb="$4">
-              <View
-                style={{
-                  width: 48,
-                  height: 48,
-                  backgroundColor: '#000',
-                  borderRadius: 12,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  marginRight: 12,
-                }}
-              >
-                {/* Replace with Image if you want the Apple logo */}
-                <Text color="#fff" fontSize={32}>
-                  
-                </Text>
-              </View>
-              <Text fontSize={28} fontWeight="700">
-                AAPL Market Data
-              </Text>
-            </XStack>
-            <YStack bg="#e5e7eb" br={16} p="$3">
-              {data && (
+    <ScrollView>
+      <YStack f={1} p="$4" bg="#f5f5f7">
+        <Header title="AAPL Market Data" />
+        <YStack bg="#e5e7eb" br={16} p="$3">
+          <XStack jc={'space-between'}>
+            <LegendItem color={COLORS.open} label="Open" />
+            <LegendItem color={COLORS.high} label="High" />
+            <LegendItem color={COLORS.low} label="Low" />
+            <LegendItem color={COLORS.close} label="Close" />
+          </XStack>
+          {data && (
+            <GestureDetector gesture={pinchGesture}>
+              <Animated.View style={animatedStyle}>
                 <LineChart
-                  data={chartLines.map((line) => line.data)}
-                  color={chartLines.map((line) => line.color)}
-                  thickness={3}
-                  hideDataPoints
-                  yAxisLabelPrefix="$"
-                  xAxisLabelTextStyle={{ fontSize: 10 }}
-                  yAxisTextStyle={{ fontSize: 10 }}
-                  showLegend
-                  legendLabels={chartLines.map((line) => line.label)}
+                  data={open}
+                  data2={close}
+                  data3={low}
+                  data4={high}
+                  color1={showOpen ? COLORS.open : 'transparent'}
+                  color2={showClose ? COLORS.close : 'transparent'}
+                  color3={showLow ? COLORS.low : 'transparent'}
+                  color4={showHigh ? COLORS.high : 'transparent'}
                   height={220}
-                  noOfSections={5}
-                  isAnimated
+                  yAxisLabelPrefix="$"
+                  curved
                 />
-              )}
-            </YStack>
-            <YStack mt="$4">
-              <Text fontWeight="700" mb="$2">
-                Display
-              </Text>
-              <YStack gap="$2">
-                <CheckboxWithLabel
-                  checked={visibleLines.open}
-                  onCheckedChange={() => handleToggle('open')}
-                  label="Open"
-                />
-                <CheckboxWithLabel
-                  checked={visibleLines.close}
-                  onCheckedChange={() => handleToggle('close')}
-                  label="Close"
-                />
-                <CheckboxWithLabel
-                  checked={visibleLines.low}
-                  onCheckedChange={() => handleToggle('low')}
-                  label="Low"
-                />
-                <CheckboxWithLabel
-                  checked={visibleLines.high}
-                  onCheckedChange={() => handleToggle('high')}
-                  label="High"
-                />
-              </YStack>
-            </YStack>
-            <Button
-              mt="$4"
-              bg="#888"
-              color="#fff"
-              onPress={() => refetch()}
-              disabled={isFetching}
-              br={16}
-              px={24}
-              py={12}
-            >
-              Reset Zoom
-            </Button>
-            <StatusBar style="auto" />
+              </Animated.View>
+            </GestureDetector>
+          )}
+        </YStack>
+        <YStack mt="$4">
+          <Text fontWeight="700" mb="$2">
+            Display
+          </Text>
+          <YStack gap="$2">
+            <CheckboxWithLabel
+              checked={showOpen}
+              onCheckedChange={() => toggleShowOpen(!showOpen)}
+              label="Open"
+            />
+            <CheckboxWithLabel
+              checked={showClose}
+              onCheckedChange={() => toggleShowClose(!showClose)}
+              label="Close"
+            />
+            <CheckboxWithLabel
+              checked={showLow}
+              onCheckedChange={() => toggleShowLow(!showLow)}
+              label="Low"
+            />
+            <CheckboxWithLabel
+              checked={showHigh}
+              onCheckedChange={() => toggleShowHigh(!showHigh)}
+              label="High"
+            />
           </YStack>
-        </ScrollView>
-      </SafeAreaView>
-    </TamaguiProvider>
+        </YStack>
+        <Button
+          mt="$4"
+          bg="#888"
+          color="#fff"
+          onPress={resetZoom}
+          disabled={isFetching}
+          br={16}
+          px={24}
+          py={12}
+        >
+          Reset Zoom
+        </Button>
+      </YStack>
+    </ScrollView>
   )
 }
