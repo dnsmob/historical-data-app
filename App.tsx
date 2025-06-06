@@ -4,15 +4,20 @@ import {
   useQuery,
 } from '@tanstack/react-query'
 import { StatusBar } from 'expo-status-bar'
-import { useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { SafeAreaView } from 'react-native'
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from 'react-native-gesture-handler'
 import { LineChart } from 'react-native-gifted-charts'
+import Animated, { useSharedValue } from 'react-native-reanimated'
 import {
   Button,
   ScrollView,
   TamaguiProvider,
   Text,
-  View,
   XStack,
   YStack,
 } from 'tamagui'
@@ -20,15 +25,6 @@ import { CheckboxWithLabel } from './src/components/CheckboxWithLabel'
 import { Header } from './src/components/Header'
 import { LegendItem } from './src/components/LegendItem'
 import config from './tamagui.config'
-import {
-  GestureDetector,
-  Gesture,
-  GestureHandlerRootView,
-} from 'react-native-gesture-handler'
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-} from 'react-native-reanimated'
 
 // const config = createTamagui(baseConfig)
 
@@ -100,10 +96,20 @@ const AppInternal = () => {
     },
   })
 
+  const [zoomArray, setZoomArray] = useState<StockDataPoint[]>([])
+
+  useEffect(() => {
+    // console.log('data is stable')
+    if (data && data.length > 0) {
+      setZoomArray(data)
+    }
+  }, [data])
+
   // Reset zoom function
   const resetZoom = () => {
     scale.value = 1
     savedScale.value = 1
+    setZoomArray(data ?? [])
   }
 
   // Create pinch gesture
@@ -112,26 +118,40 @@ const AppInternal = () => {
       scale.value = savedScale.value * e.scale
     })
     .onEnd(() => {
+      if (scale.value < 1) {
+        console.log('invalid')
+        return
+      }
+
       savedScale.value = scale.value
+
+      const temp = data
+        ?.map((entry, index) => {
+          // skip every nth entry
+          if (index % Math.round(scale.value) !== 0) {
+            return null
+          }
+
+          return entry
+        })
+        .filter(Boolean) as StockDataPoint[]
+
+      // console.log('🔍 ~ onEnd() callback ~ App.tsx:140 ~ temp:', temp.length)
+      // crashing here 😱
+      setTimeout(() => setZoomArray(temp))
     })
 
-  // Create animated style for scaling
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }))
-
-  const open = data?.map((d) => ({
+  const open = zoomArray?.map((d) => ({
     value: d.open,
     label: new Date(Number(d.timestamp) * 1000).toLocaleDateString('en-GB', {
       day: '2-digit',
       month: '2-digit',
-      year: 'numeric',
     }),
   }))
 
-  const close = data?.map((d) => ({ value: d.close }))
-  const low = data?.map((d) => ({ value: d.low }))
-  const high = data?.map((d) => ({ value: d.high }))
+  const close = zoomArray?.map((d) => ({ value: d.close }))
+  const low = zoomArray?.map((d) => ({ value: d.low }))
+  const high = zoomArray?.map((d) => ({ value: d.high }))
 
   return (
     <ScrollView>
@@ -146,20 +166,25 @@ const AppInternal = () => {
           </XStack>
           {data && (
             <GestureDetector gesture={pinchGesture}>
-              <Animated.View style={animatedStyle}>
-                <LineChart
-                  data={open}
-                  data2={close}
-                  data3={low}
-                  data4={high}
-                  color1={showOpen ? COLORS.open : 'transparent'}
-                  color2={showClose ? COLORS.close : 'transparent'}
-                  color3={showLow ? COLORS.low : 'transparent'}
-                  color4={showHigh ? COLORS.high : 'transparent'}
-                  height={220}
-                  yAxisLabelPrefix="$"
-                  curved
-                />
+              <Animated.View>
+                {zoomArray && (
+                  <LineChart
+                    data={open}
+                    data2={close}
+                    data3={low}
+                    data4={high}
+                    // very slow on large datasets
+                    color1={showOpen ? COLORS.open : 'transparent'}
+                    color2={showClose ? COLORS.close : 'transparent'}
+                    color3={showLow ? COLORS.low : 'transparent'}
+                    color4={showHigh ? COLORS.high : 'transparent'}
+                    height={220}
+                    yAxisLabelPrefix="$"
+                    xAxisLabelTextStyle={{ fontSize: 10 }}
+                    curved
+                    hideDataPoints
+                  />
+                )}
               </Animated.View>
             </GestureDetector>
           )}
@@ -194,7 +219,6 @@ const AppInternal = () => {
         <Button
           mt="$4"
           bg="#888"
-          color="#fff"
           onPress={resetZoom}
           disabled={isFetching}
           br={16}
