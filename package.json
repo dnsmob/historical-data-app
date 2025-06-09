@@ -9,16 +9,26 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@babel/plugin-transform-private-methods": "^7.27.1",
+    "@expo/metro-runtime": "~5.0.4",
+    "@shopify/react-native-skia": "^2.0.3",
     "@tanstack/react-query": "^5.80.6",
+    "add": "^2.0.6",
     "expo": "~53.0.10",
     "expo-linear-gradient": "~14.1.5",
     "expo-status-bar": "~2.2.3",
+    "metro-react-native-babel-preset": "^0.77.0",
     "react": "19.0.0",
+    "react-dom": "19.0.0",
     "react-native": "0.79.3",
     "react-native-gesture-handler": "^2.25.0",
     "react-native-gifted-charts": "^1.4.61",
-    "react-native-reanimated": "^3.18.0",
-    "react-native-svg": "^15.12.0"
+    "react-native-graph": "^1.1.0",
+    "react-native-reanimated": "3.17.4",
+    "react-native-responsive-linechart": "^5.7.1",
+    "react-native-svg": "^15.12.0",
+    "react-native-web": "^0.20.0",
+    "yarn": "^1.22.22"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
